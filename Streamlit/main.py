@@ -810,7 +810,7 @@ try:
          st.write("No results found.")
 
 except:
-    st.write('Loading......')
+    st.write('Loading...')
 
 
     
