@@ -1,6 +1,5 @@
-#!/usr/bin/env python
-
 import pandas as pd
+import sqlalchemy
 from sqlalchemy import create_engine
 from dotenv import load_dotenv
 import streamlit as st
@@ -10,13 +9,12 @@ load_dotenv()
 
 engine = create_engine(
     'snowflake://{user}:{password}@{account_identifier}/'.format(
-        user='Admsnow',
-        password='Siddhesh1406',
-        account_identifier= 'cuetpku-pz52461',
-        database= 'SNOWFLAKE_SAMPLE_DATA',
-        schema= 'TPCDS_SF10TCL',
-        warehouse= 'COMPUTE_WH',
-        role='ACCOUNTADMIN'
+        user=os.getenv("SNOWFLAKE_USERNAME"),
+        password=os.getenv("SNOWFLAKE_PASSWORD"),
+        account_identifier=os.getenv("SNOWFLAKE_ACCOUNT"),
+        database=os.getenv("SNOWFLAKE_DATABASE"),
+        schema=os.getenv("SNOWFLAKE_SCHEMA"),
+        warehouse=os.getenv("SNOWFLAKE_WAREHOUSE"),
     )
 )
 
@@ -148,7 +146,559 @@ def Q4(Lower_Income, Upper_Income, City):
  limit 1; """
     return sql_Q4
 
+def Q5(year):
 
+    sql_Q5 = f""" select  substr(r_reason_desc,1,20)
+
+       ,avg(ws_quantity)
+
+       ,avg(wr_refunded_cash)
+
+       ,avg(wr_fee)
+
+from web_sales, web_returns, web_page, customer_demographics cd1,
+
+      customer_demographics cd2, customer_address, date_dim, reason
+
+where ws_web_page_sk = wp_web_page_sk
+
+   and ws_item_sk = wr_item_sk
+
+   and ws_order_number = wr_order_number
+
+   and ws_sold_date_sk = d_date_sk and d_year ='{year}'
+
+   and cd1.cd_demo_sk = wr_refunded_cdemo_sk
+
+   and cd2.cd_demo_sk = wr_returning_cdemo_sk
+
+   and ca_address_sk = wr_refunded_addr_sk
+
+   and r_reason_sk = wr_reason_sk
+
+   and
+
+   (
+
+    (
+
+     cd1.cd_marital_status = 'D'
+
+     and
+
+     cd1.cd_marital_status = cd2.cd_marital_status
+
+     and
+
+     cd1.cd_education_status = 'Primary'
+
+     and
+
+     cd1.cd_education_status = cd2.cd_education_status
+
+     and
+
+     ws_sales_price between 100.00 and 150.00
+
+    )
+
+   or
+
+    (
+
+     cd1.cd_marital_status = 'U'
+
+     and
+
+     cd1.cd_marital_status = cd2.cd_marital_status
+
+     and
+
+     cd1.cd_education_status = '4 yr Degree'
+
+     and
+
+     cd1.cd_education_status = cd2.cd_education_status
+
+     and
+
+     ws_sales_price between 50.00 and 100.00
+
+    )
+
+   or
+
+    (
+
+     cd1.cd_marital_status = 'W'
+
+     and
+
+     cd1.cd_marital_status = cd2.cd_marital_status
+
+     and
+
+     cd1.cd_education_status = 'Advanced Degree'
+
+     and
+
+     cd1.cd_education_status = cd2.cd_education_status
+
+     and
+
+     ws_sales_price between 150.00 and 200.00
+
+    )
+
+   )
+
+   and
+
+   (
+
+    (
+
+     ca_country = 'United States'
+
+     and
+
+     ca_state in ('LA', 'CO', 'TX')
+
+     and ws_net_profit between 100 and 200  
+
+    )
+
+    or
+
+    (
+
+     ca_country = 'United States'
+
+     and
+
+     ca_state in ('OH', 'VA', 'MO')
+
+     and ws_net_profit between 150 and 300  
+
+    )
+
+    or
+
+    (
+
+     ca_country = 'United States'
+
+     and
+
+     ca_state in ('FL', 'OK', 'MS')
+
+     and ws_net_profit between 50 and 250  
+
+    )
+
+   )
+
+group by r_reason_desc
+
+order by substr(r_reason_desc,1,20)
+
+        ,avg(ws_quantity)
+
+        ,avg(wr_refunded_cash)
+
+        ,avg(wr_fee)
+
+limit 5; """
+
+    return sql_Q5
+
+ 
+
+def Q6(DMS):
+
+    sql_Q6 = f"""
+
+    select   
+
+    sum(ws_net_paid) as total_sum
+
+   ,i_category
+
+   ,i_class
+
+   ,grouping(i_category)+grouping(i_class) as lochierarchy
+
+   ,rank() over (
+
+    partition by grouping(i_category)+grouping(i_class),
+
+    case when grouping(i_class) = 0 then i_category end
+
+    order by sum(ws_net_paid) desc) as rank_within_parent
+
+from
+
+    web_sales
+
+   ,date_dim       d1
+
+   ,item
+
+where
+
+    d1.d_month_seq between '{DMS}' and '{DMS}'+11
+
+and d1.d_date_sk = ws_sold_date_sk
+
+and i_item_sk  = ws_item_sk
+
+group by rollup(i_category,i_class)
+
+order by
+
+   lochierarchy desc,
+
+   case when lochierarchy = 0 then i_category end,
+
+   rank_within_parent
+
+limit 10;
+
+"""
+
+    return sql_Q6
+
+ 
+
+ 
+
+def Q7(DMS):
+
+    sql_Q7 = f""" select count(*)
+
+        from ((select distinct c_last_name, c_first_name, d_date
+
+       from store_sales, date_dim, customer
+
+       where store_sales.ss_sold_date_sk = date_dim.d_date_sk
+
+         and store_sales.ss_customer_sk = customer.c_customer_sk
+
+         and d_month_seq between '{DMS}' and '{DMS}'+11)
+
+       except
+
+      (select distinct c_last_name, c_first_name, d_date
+
+       from catalog_sales, date_dim, customer
+
+       where catalog_sales.cs_sold_date_sk = date_dim.d_date_sk
+
+         and catalog_sales.cs_bill_customer_sk = customer.c_customer_sk
+
+         and d_month_seq between '{DMS}' and '{DMS}'+11)
+
+       except
+
+      (select distinct c_last_name, c_first_name, d_date
+
+       from web_sales, date_dim, customer
+
+       where web_sales.ws_sold_date_sk = date_dim.d_date_sk
+
+         and web_sales.ws_bill_customer_sk = customer.c_customer_sk
+
+         and d_month_seq between '{DMS}' and '{DMS}'+11)
+
+        ) cool_cust
+
+; """
+
+    return sql_Q7
+
+def Q8():
+
+    sql_Q8 = f""" select  *
+
+from
+
+(select count(*) h8_30_to_9
+
+from store_sales, household_demographics , time_dim, store
+
+where ss_sold_time_sk = time_dim.t_time_sk   
+
+     and ss_hdemo_sk = household_demographics.hd_demo_sk
+
+     and ss_store_sk = s_store_sk
+
+     and time_dim.t_hour = 8
+
+     and time_dim.t_minute >= 30
+
+     and ((household_demographics.hd_dep_count = 0 and household_demographics.hd_vehicle_count<=0+2) or
+
+          (household_demographics.hd_dep_count = 1 and household_demographics.hd_vehicle_count<=1+2) or
+
+          (household_demographics.hd_dep_count = -1 and household_demographics.hd_vehicle_count<=-1+2))
+
+     and store.s_store_name = 'ese') s1,
+
+(select count(*) h9_to_9_30
+
+from store_sales, household_demographics , time_dim, store
+
+where ss_sold_time_sk = time_dim.t_time_sk
+
+     and ss_hdemo_sk = household_demographics.hd_demo_sk
+
+     and ss_store_sk = s_store_sk
+
+     and time_dim.t_hour = 9
+
+     and time_dim.t_minute < 30
+
+     and ((household_demographics.hd_dep_count = 0 and household_demographics.hd_vehicle_count<=0+2) or
+
+          (household_demographics.hd_dep_count = 1 and household_demographics.hd_vehicle_count<=1+2) or
+
+          (household_demographics.hd_dep_count = -1 and household_demographics.hd_vehicle_count<=-1+2))
+
+     and store.s_store_name = 'ese') s2,
+
+(select count(*) h9_30_to_10
+
+from store_sales, household_demographics , time_dim, store
+
+where ss_sold_time_sk = time_dim.t_time_sk
+
+     and ss_hdemo_sk = household_demographics.hd_demo_sk
+
+     and ss_store_sk = s_store_sk
+
+     and time_dim.t_hour = 9
+
+     and time_dim.t_minute >= 30
+
+     and ((household_demographics.hd_dep_count = 0 and household_demographics.hd_vehicle_count<=0+2) or
+
+          (household_demographics.hd_dep_count = 1 and household_demographics.hd_vehicle_count<=1+2) or
+
+          (household_demographics.hd_dep_count = -1 and household_demographics.hd_vehicle_count<=-1+2))
+
+     and store.s_store_name = 'ese') s3,
+
+(select count(*) h10_to_10_30
+
+from store_sales, household_demographics , time_dim, store
+
+where ss_sold_time_sk = time_dim.t_time_sk
+
+     and ss_hdemo_sk = household_demographics.hd_demo_sk
+
+     and ss_store_sk = s_store_sk
+
+     and time_dim.t_hour = 10
+
+     and time_dim.t_minute < 30
+
+     and ((household_demographics.hd_dep_count = 0 and household_demographics.hd_vehicle_count<=0+2) or
+
+          (household_demographics.hd_dep_count = 1 and household_demographics.hd_vehicle_count<=1+2) or
+
+          (household_demographics.hd_dep_count = -1 and household_demographics.hd_vehicle_count<=-1+2))
+
+     and store.s_store_name = 'ese') s4,
+
+(select count(*) h10_30_to_11
+
+from store_sales, household_demographics , time_dim, store
+
+where ss_sold_time_sk = time_dim.t_time_sk
+
+     and ss_hdemo_sk = household_demographics.hd_demo_sk
+
+     and ss_store_sk = s_store_sk
+
+     and time_dim.t_hour = 10
+
+     and time_dim.t_minute >= 30
+
+     and ((household_demographics.hd_dep_count = 0 and household_demographics.hd_vehicle_count<=0+2) or
+
+          (household_demographics.hd_dep_count = 1 and household_demographics.hd_vehicle_count<=1+2) or
+
+          (household_demographics.hd_dep_count = -1 and household_demographics.hd_vehicle_count<=-1+2))
+
+     and store.s_store_name = 'ese') s5,
+
+(select count(*) h11_to_11_30
+
+from store_sales, household_demographics , time_dim, store
+
+where ss_sold_time_sk = time_dim.t_time_sk
+
+     and ss_hdemo_sk = household_demographics.hd_demo_sk
+
+     and ss_store_sk = s_store_sk
+
+     and time_dim.t_hour = 11
+
+     and time_dim.t_minute < 30
+
+     and ((household_demographics.hd_dep_count = 0 and household_demographics.hd_vehicle_count<=0+2) or
+
+          (household_demographics.hd_dep_count = 1 and household_demographics.hd_vehicle_count<=1+2) or
+
+          (household_demographics.hd_dep_count = -1 and household_demographics.hd_vehicle_count<=-1+2))
+
+     and store.s_store_name = 'ese') s6,
+
+(select count(*) h11_30_to_12
+
+from store_sales, household_demographics , time_dim, store
+
+where ss_sold_time_sk = time_dim.t_time_sk
+
+     and ss_hdemo_sk = household_demographics.hd_demo_sk
+
+     and ss_store_sk = s_store_sk
+
+     and time_dim.t_hour = 11
+
+     and time_dim.t_minute >= 30
+
+     and ((household_demographics.hd_dep_count = 0 and household_demographics.hd_vehicle_count<=0+2) or
+
+          (household_demographics.hd_dep_count = 1 and household_demographics.hd_vehicle_count<=1+2) or
+
+          (household_demographics.hd_dep_count = -1 and household_demographics.hd_vehicle_count<=-1+2))
+
+     and store.s_store_name = 'ese') s7,
+
+(select count(*) h12_to_12_30
+
+from store_sales, household_demographics , time_dim, store
+
+where ss_sold_time_sk = time_dim.t_time_sk
+
+     and ss_hdemo_sk = household_demographics.hd_demo_sk
+
+     and ss_store_sk = s_store_sk
+
+     and time_dim.t_hour = 12
+
+     and time_dim.t_minute < 30
+
+     and ((household_demographics.hd_dep_count = 0 and household_demographics.hd_vehicle_count<=0+2) or
+
+          (household_demographics.hd_dep_count = 1 and household_demographics.hd_vehicle_count<=1+2) or
+
+          (household_demographics.hd_dep_count = -1 and household_demographics.hd_vehicle_count<=-1+2))
+
+     and store.s_store_name = 'ese') s8
+
+;"""
+
+    return sql_Q8
+
+ 
+
+def Q9(year, class_category_mappings, cat_category_mappings):
+
+    sql_Q9 = f""" select  *
+
+from(
+
+select i_category, i_class, i_brand,
+
+       s_store_name, s_company_name,
+
+       d_moy,
+
+       sum(ss_sales_price) sum_sales,
+
+       avg(sum(ss_sales_price)) over
+
+         (partition by i_category, i_brand, s_store_name, s_company_name)
+
+         avg_monthly_sales
+
+from item, store_sales, date_dim, store
+
+where ss_item_sk = i_item_sk and
+
+      ss_sold_date_sk = d_date_sk and
+
+      ss_store_sk = s_store_sk and
+
+       d_year in ({year}) and
+
+                        ((i_category in ({','.join(["'" + category + "'" for category in cat_category_mappings])}) and
+
+                          i_class in ({','.join(["'" + clazz + "'" for clazz in class_category_mappings])})
+
+                         )
+
+                      )
+
+group by i_category, i_class, i_brand,
+
+         s_store_name, s_company_name, d_moy) tmp1
+
+where case when (avg_monthly_sales <> 0) then (abs(sum_sales - avg_monthly_sales) / avg_monthly_sales) else null end > 0.1
+
+order by sum_sales - avg_monthly_sales, s_store_name
+
+limit 5; """
+
+    return sql_Q9
+
+ 
+
+ 
+
+def Q10(Hour_AM, Hour_PM, Percent):
+
+    sql_Q10 = f""" select  cast(amc as decimal(15,4))/cast(pmc as decimal(15,4)) am_pm_ratio
+
+from ( select count(*) amc
+
+       from web_sales, household_demographics , time_dim, web_page
+
+       where ws_sold_time_sk = time_dim.t_time_sk
+
+         and ws_ship_hdemo_sk = household_demographics.hd_demo_sk
+
+         and ws_web_page_sk = web_page.wp_web_page_sk
+
+         and time_dim.t_hour between '{Hour_AM}' and '{Hour_AM}'+1
+
+         and household_demographics.hd_dep_count = '{Percent}'
+
+         and web_page.wp_char_count between 5000 and 5200) at,
+
+      ( select count(*) pmc
+
+       from web_sales, household_demographics , time_dim, web_page
+
+       where ws_sold_time_sk = time_dim.t_time_sk
+
+         and ws_ship_hdemo_sk = household_demographics.hd_demo_sk
+
+         and ws_web_page_sk = web_page.wp_web_page_sk
+
+         and time_dim.t_hour between '{Hour_PM}' and '{Hour_PM}'+1
+
+         and household_demographics.hd_dep_count = '{Percent}'
+
+         and web_page.wp_char_count between 5000 and 5200) pt
+
+order by am_pm_ratio
+
+limit 10;"""
+
+    return sql_Q10
 
 # Streamlit UI
 st.title("Snowflake Query Runner")
